@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>แผนที่เก็บของ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: floor-plan grid (A,B,C × 1,2,3 like a warehouse bin map) on the left, details panel on the right; stacks on phones. */
+:root{
+  --bg:#eef1f3; --surface:#ffffff; --surface-2:#f6f8f9; --line:#d4dadf; --line-soft:#e3e8eb;
+  --fg:#1d2328; --muted:#5f6b74; --floor:#e4e9ec; --grid:#cfd7dc;
+  --kraft:#c9a46b; --kraft-2:#e8d3ad; --kraft-fg:#3a2a12;
+  --steel:#8496a3; --steel-2:#d5dde3; --steel-fg:#1d2a33;
+  --accent:#f2b705; --accent-fg:#241b00; --ink:#1f4e79; --hit:#f2b705; --danger:#b4372f;
+  --font:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151a1e; --surface:#1d2429; --surface-2:#232b31; --line:#36424a; --line-soft:#2b343a;
+  --fg:#e7ecef; --muted:#9aa7b0; --floor:#1a2025; --grid:#2c363d;
+  --kraft:#b38d55; --kraft-2:#4a3c26; --kraft-fg:#f3e3c4;
+  --steel:#6f8391; --steel-2:#2f3b44; --steel-fg:#dbe4ea;
+  --accent:#f2b705; --accent-fg:#241b00; --ink:#8cbbe6; --hit:#f2b705; --danger:#e0675e;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151a1e; --surface:#1d2429; --surface-2:#232b31; --line:#36424a; --line-soft:#2b343a;
+  --fg:#e7ecef; --muted:#9aa7b0; --floor:#1a2025; --grid:#2c363d;
+  --kraft:#b38d55; --kraft-2:#4a3c26; --kraft-fg:#f3e3c4;
+  --steel:#6f8391; --steel-2:#2f3b44; --steel-fg:#dbe4ea;
+  --accent:#f2b705; --accent-fg:#241b00; --ink:#8cbbe6; --hit:#f2b705; --danger:#e0675e;
+  color-scheme:dark}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--font);font-size:15px;line-height:1.5}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+.wrap{max-width:1240px;margin:0 auto;padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .tape{width:30px;height:30px;border-radius:4px;background:repeating-linear-gradient(-45deg,var(--accent) 0 6px,var(--fg) 6px 12px)}
+.brand h1{font-size:20px;font-weight:700;margin:0;letter-spacing:.01em}
+.search{flex:1 1 280px;position:relative;min-width:0}
+.search input{width:100%;padding:11px 14px 11px 38px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--surface);outline:none}
+.search input:focus{border-color:var(--ink)}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.status{font-size:13px;color:var(--muted)}
+.status.warn{color:var(--danger)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:16px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.tab{flex:none;border:1.5px solid var(--line);background:var(--surface);padding:7px 14px;border-radius:var(--r);cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tab .n{font-size:12px;font-family:var(--mono);background:var(--accent);color:var(--accent-fg);border-radius:10px;padding:0 7px}
+.tab.add{border-style:dashed;color:var(--muted)}
+.btn{border:1.5px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:var(--r);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.btn.yellow{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.btn.danger{color:var(--danger)}
+.btn.sm{padding:4px 9px;font-size:13px}
+.btn:focus-visible,.tab:focus-visible,.unit:focus-visible,.chip:focus-visible,.row:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.room-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.room-bar h2{margin:0;font-size:17px;font-weight:600}
+.room-bar .meta{font-size:13px;color:var(--muted)}
+.plan{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r);padding:12px;margin-top:10px;overflow-x:auto}
+.plan-grid{display:grid;grid-template-columns:22px minmax(0,1fr);grid-template-rows:20px auto;gap:4px;min-width:420px}
+.axis{display:grid;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;align-items:center}
+.axis.rows{grid-auto-flow:row}
+.floor{position:relative;background-color:var(--floor);border:2px solid var(--fg);border-radius:2px;touch-action:auto;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px)}
+.unit{position:absolute;padding:3px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.floor.editing,.floor.editing .unit{touch-action:none}
+.floor.editing .unit{cursor:grab}
+.floor.editing{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 35%,transparent)}
+.floor.editing .unit .body{border-style:dashed}
+.floor:not(.editing) .rz{display:none}
+.editbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--accent);color:var(--accent-fg);border-radius:var(--r);padding:7px 12px;margin-top:10px;font-size:13.5px;font-weight:500}
+.editbar .btn{margin-left:auto;background:var(--accent-fg);color:var(--accent);border-color:var(--accent-fg);font-weight:600}
+.unit .body{height:100%;border-radius:3px;border:1.5px solid;display:flex;flex-direction:column;gap:3px;padding:4px 6px;overflow:hidden}
+.unit.k-box .body,.unit.k-bag .body,.unit.k-other .body{background:var(--kraft-2);border-color:var(--kraft);color:var(--kraft-fg)}
+.unit.k-rack .body,.unit.k-cabinet .body,.unit.k-drawer .body{background:var(--steel-2);border-color:var(--steel);color:var(--steel-fg)}
+.unit .code{font-family:var(--mono);font-weight:600;font-size:13px;line-height:1.1;display:flex;justify-content:space-between;gap:4px}
+.unit .code small{font-weight:500;opacity:.7}
+.unit .chips{display:flex;flex-wrap:wrap;gap:3px;min-height:0;overflow:hidden}
+.chip{font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 5px;border-radius:3px;background:var(--kraft-2);border:1px solid var(--kraft);color:var(--kraft-fg);cursor:pointer}
+.unit.sel .body{outline:2.5px solid var(--ink);outline-offset:1px}
+.chip.sel{outline:2px solid var(--ink)}
+.unit.hit .body,.chip.hit{box-shadow:0 0 0 3px var(--hit)}
+.unit.dragging{cursor:grabbing;z-index:5;opacity:.85}
+.unit.dim{opacity:.35}
+.thumb{width:46px;height:46px;border-radius:5px;flex:none;border:1px solid var(--line);background:var(--surface-2);padding:0;overflow:hidden;cursor:zoom-in;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.ph{cursor:pointer;border-style:dashed}
+.thumb.sm{width:36px;height:36px}
+.step{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:var(--r);flex:none;background:var(--surface)}
+.step button{border:0;background:none;width:32px;height:32px;cursor:pointer;font-size:18px;line-height:1;color:var(--fg)}
+.step button:hover{background:var(--surface-2)}
+.step .v{min-width:30px;text-align:center;font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+.step input{width:56px;border:0;text-align:center;font-family:var(--mono);font-weight:600;background:none;padding:6px 0}
+.row.out .name{color:var(--muted)}
+.row.out .thumb{opacity:.5}
+.outtag{font-size:11.5px;font-weight:600;background:var(--danger);color:var(--surface);border-radius:3px;padding:0 6px;margin-left:6px;vertical-align:1px}
+.row .ra{margin-top:5px}
+.photo-pick{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.photo-pick img{width:88px;height:88px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.lb{background:var(--surface);border-radius:8px;padding:12px;max-width:min(92vw,720px);display:flex;flex-direction:column;gap:10px;border:1.5px solid var(--line)}
+.lb img{max-width:100%;max-height:75vh;border-radius:6px;object-fit:contain}
+.quick .qn{width:58px;flex:none;text-align:center}
+.rz{position:absolute;z-index:2;touch-action:none}
+.rz.e{top:6px;bottom:14px;right:0;width:12px;cursor:ew-resize}
+.rz.s{left:6px;right:14px;bottom:0;height:12px;cursor:ns-resize}
+.rz.se{right:-2px;bottom:-2px;width:22px;height:22px;cursor:nwse-resize;display:flex;align-items:flex-end;justify-content:flex-end;padding:3px}
+.rz.se::after{content:"";width:10px;height:10px;border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;border-radius:0 0 2px 0;opacity:.55}
+.unit.sel .rz.se::after{opacity:1;color:var(--ink)}
+.unit.sel .rz.e::after,.unit.sel .rz.s::after{content:"";position:absolute;background:var(--ink);border-radius:2px}
+.unit.sel .rz.e::after{right:2px;top:50%;width:4px;height:22px;transform:translateY(-50%)}
+.unit.sel .rz.s::after{bottom:2px;left:50%;height:4px;width:22px;transform:translateX(-50%)}
+.sizetag{position:absolute;right:4px;top:-22px;font-family:var(--mono);font-size:12px;font-weight:600;background:var(--ink);color:var(--surface);padding:1px 6px;border-radius:3px;z-index:6;pointer-events:none}
+@media (pointer:coarse){.rz.e{width:18px}.rz.s{height:18px}.rz.se{width:30px;height:30px}}
+.hint{font-size:12.5px;color:var(--muted);margin-top:8px}
+.panel{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel h3{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.label{display:inline-flex;align-items:center;gap:10px}
+.label .tag{font-family:var(--mono);font-weight:600;font-size:22px;padding:2px 10px;border:2px solid var(--fg);border-radius:3px;background:var(--surface-2)}
+.label .kind{font-size:13px;color:var(--muted)}
+.path{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.path b{color:var(--fg);font-weight:500}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+.list{display:flex;flex-direction:column;border-top:1px solid var(--line-soft)}
+.row{display:flex;align-items:flex-start;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line-soft)}
+.row .main{flex:1;min-width:0}
+.row .name{font-weight:500;overflow-wrap:anywhere}
+.row .sub{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.row .qty{font-family:var(--mono);font-size:13px;color:var(--muted);flex:none;padding-top:2px;font-variant-numeric:tabular-nums}
+.row .ra{display:flex;gap:4px;flex:none}
+.row.click{cursor:pointer}
+.row.click:hover{background:var(--surface-2)}
+.empty{font-size:14px;color:var(--muted);padding:10px 0}
+.quick{display:flex;gap:6px}
+.quick input{flex:1;min-width:0;padding:8px 10px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
+.results{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r);padding:6px 14px}
+.results .head{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;color:var(--muted)}
+mark{background:var(--accent);color:var(--accent-fg);border-radius:2px;padding:0 1px}
+.loc{font-family:var(--mono);font-size:12px;font-weight:600;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:0 5px;color:var(--fg)}
+.overlay{position:fixed;inset:0;background:rgba(10,14,18,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal{background:var(--surface);border-radius:8px;width:100%;max-width:440px;max-height:90vh;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:12px;border:1.5px solid var(--line)}
+.modal h4{margin:0;font-size:17px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:13px;color:var(--muted)}
+.field input,.field select,.field textarea{padding:9px 10px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--surface-2);width:100%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal .foot{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.err{color:var(--danger);font-size:13px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:14px;z-index:60}
+.notice{background:var(--surface);border:1.5px dashed var(--line);border-radius:var(--r);padding:28px 18px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:10px;align-items:center}
+@media (prefers-reduced-motion:no-preference){.unit{transition:left .12s,top .12s}.unit.dragging{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><div class="tape" aria-hidden="true"></div><h1>แผนที่เก็บของ</h1></div>
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="ค้นหาของ เช่น ปลั๊กพ่วง, เอกสาร, 1A" autocomplete="off" aria-label="ค้นหาของ">
+    </div>
+    <span id="status" class="status">กำลังโหลด…</span>
+  </header>
+  <div id="results" class="results" hidden></div>
+  <div class="grid">
+    <section style="min-width:0">
+      <div id="tabs" class="tabs" role="tablist"></div>
+      <div id="roomArea"></div>
+    </section>
+    <aside id="panel" class="panel"></aside>
+  </div>
+</div>
+<div id="modalRoot"></div>
+
+<script>
+const KINDS={rack:'ชั้นวาง',box:'กล่อง',cabinet:'ตู้',drawer:'ลิ้นชัก',bag:'ถุง/กระเป๋า',other:'อื่นๆ'};
+const S={rooms:new Map(),units:new Map(),items:new Map(),room:null,sel:null,q:'',loaded:{rooms:false,units:false,items:false}};
+let db=null, mode='loading', assetsNs=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const colName=i=>{let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+const rid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+
+/* ---------- derived ---------- */
+const roomsSorted=()=>[...S.rooms.entries()].sort((a,b)=>(a[1].order??0)-(b[1].order??0)||String(a[1].name).localeCompare(b[1].name,'th'));
+function roomOf(u){if(!u)return null;if(u.parentId){const p=S.units.get(u.parentId);if(p)return p.roomId}return u.roomId}
+const childrenOf=id=>[...S.units.entries()].filter(([,u])=>u.parentId===id).sort((a,b)=>String(a[1].code).localeCompare(String(b[1].code),'th',{numeric:true}));
+const topUnits=rId=>[...S.units.entries()].filter(([,u])=>!(u.parentId&&S.units.has(u.parentId))&&u.roomId===rId);
+const itemsIn=id=>[...S.items.entries()].filter(([,i])=>i.unitId===id).sort((a,b)=>String(a[1].name).localeCompare(String(b[1].name),'th'));
+function countDeep(id){let n=itemsIn(id).length;for(const [cid] of childrenOf(id))n+=itemsIn(cid).length;return n}
+function unitPath(id){const u=S.units.get(id);if(!u)return[];const out=[];const r=S.rooms.get(roomOf(u));if(r)out.push(r.name);if(u.parentId&&S.units.has(u.parentId))out.push(S.units.get(u.parentId).code);out.push(u.code);return out}
+function cellRef(u){if(u.parentId&&S.units.has(u.parentId))return null;const a=colName(u.x)+(u.y+1),b=colName(u.x+u.w-1)+(u.y+u.h);return a===b?a:a+'–'+b}
+
+/* ---------- store layer (db or in-memory fallback) ---------- */
+const api={
+  async add(col,data){if(db){const ref=await db.collection(col).add(data);return ref.id}const id=rid();S[col].set(id,{...data});render();return id},
+  async update(col,id,data){if(db)return db.doc(col+'/'+id).update(data);const cur=S[col].get(id);if(cur)S[col].set(id,{...cur,...data});render()},
+  async del(col,id){const it=col==='items'&&S.items.get(id);if(db){await db.doc(col+'/'+id).delete();if(it&&it.photoId&&assetsNs)assetsNs.delete(it.photoId).catch(()=>{});return}S[col].delete(id);render()}
+};
+async function safe(p,okMsg){try{await p;if(okMsg)toast(okMsg)}catch(e){toast('บันทึกไม่สำเร็จ: '+(e&&e.message||e&&e.code||'ลองใหม่อีกครั้ง'))}}
+
+/* ---------- render ---------- */
+function render(){
+  if(S.room&&!S.rooms.has(S.room))S.room=null;
+  if(!S.room){const f=roomsSorted()[0];S.room=f?f[0]:null}
+  if(S.sel&&!S.units.has(S.sel))S.sel=null;
+  renderTabs();renderRoom();renderPanel();renderResults();
+}
+function matches(){
+  const q=S.q.trim().toLowerCase();if(!q)return null;
+  const units=new Set(),rows=[];
+  for(const [id,u] of S.units){if((u.code+' '+(u.note||'')+' '+KINDS[u.kind]).toLowerCase().includes(q)){units.add(id);rows.push({t:'unit',id})}}
+  for(const [id,it] of S.items){if((it.name+' '+(it.note||'')).toLowerCase().includes(q)&&S.units.has(it.unitId)){units.add(it.unitId);rows.push({t:'item',id})}}
+  return {q,units,rows};
+}
+function hl(text,q){const s=String(text??'');if(!q)return esc(s);const i=s.toLowerCase().indexOf(q);if(i<0)return esc(s);return esc(s.slice(0,i))+'<mark>'+esc(s.slice(i,i+q.length))+'</mark>'+esc(s.slice(i+q.length))}
+
+function renderTabs(){
+  const m=matches(),el=$('#tabs');
+  el.innerHTML=roomsSorted().map(([id,r])=>{
+    let n=0;if(m){for(const uid of m.units)if(roomOf(S.units.get(uid))===id)n++}
+    return `<button class="tab" role="tab" data-room="${id}" aria-selected="${id===S.room}">${esc(r.name)}${n?`<span class="n">${n}</span>`:''}</button>`}).join('')
+    +(mode==='loading'?'':`<button class="tab add" id="addRoom">+ เพิ่มห้อง</button>`);
+}
+function renderRoom(){
+  const area=$('#roomArea');
+  if(mode==='loading'&&!S.rooms.size){area.innerHTML=`<div class="notice" style="margin-top:10px">กำลังโหลดห้องของคุณ…</div>`;return}
+  const r=S.rooms.get(S.room);
+  if(!r){area.innerHTML=`<div class="notice" style="margin-top:10px"><b style="color:var(--fg)">ยังไม่มีห้อง</b>เริ่มจากเพิ่มห้องแรก แล้ววางชั้นวางหรือกล่องลงในผังห้อง<button class="btn yellow" data-act="newRoom">+ เพิ่มห้องแรก</button></div>`;return}
+  const cols=Math.max(2,r.cols|0||10),rows=Math.max(2,r.rows|0||6);
+  const m=matches();
+  const tops=topUnits(S.room);
+  const total=tops.reduce((s,[id])=>s+countDeep(id),0);
+  let blocks='';
+  for(const [id,u] of tops){
+    const x=Math.min(Math.max(0,u.x|0),cols-1),y=Math.min(Math.max(0,u.y|0),rows-1);
+    const w=Math.max(1,Math.min(u.w|0||1,cols-x)),h=Math.max(1,Math.min(u.h|0||1,rows-y));
+    const kids=childrenOf(id);
+    const hit=m&&(m.units.has(id)), dim=m&&!hit&&!kids.some(([c])=>m.units.has(c));
+    blocks+=`<div class="unit k-${u.kind||'box'}${S.sel===id?' sel':''}${hit?' hit':''}${dim?' dim':''}" tabindex="0" role="button" aria-label="${esc(KINDS[u.kind]||'')} ${esc(u.code)}" data-unit="${id}" data-x="${x}" data-y="${y}" data-w="${w}" data-h="${h}" style="left:${x/cols*100}%;top:${y/rows*100}%;width:${w/cols*100}%;height:${h/rows*100}%">
+      <div class="body"><div class="code"><span>${esc(u.code)}</span><small>${countDeep(id)||''}</small></div>
+      ${kids.length?`<div class="chips">${kids.map(([cid,c])=>`<span class="chip${S.sel===cid?' sel':''}${m&&m.units.has(cid)?' hit':''}" role="button" tabindex="0" data-chip="${cid}">${esc(c.code)}</span>`).join('')}</div>`:''}
+      </div><span class="rz e" data-rz="e" aria-hidden="true"></span><span class="rz s" data-rz="s" aria-hidden="true"></span><span class="rz se" data-rz="se" aria-hidden="true"></span></div>`;
+  }
+  area.innerHTML=`
+    <div class="room-bar"><div><h2>${esc(r.name)}</h2><div class="meta">ผัง ${cols}×${rows} ช่อง · ${tops.length} จุดเก็บ · ของ ${total} รายการ</div></div>
+      <div class="actions"><button class="btn sm${S.edit?' yellow':''}" data-act="toggleEdit" aria-pressed="${!!S.edit}">${S.edit?'✓ เสร็จ':'จัดผัง / ปรับขนาด'}</button><button class="btn sm" data-act="editRoom">แก้ไขห้อง</button><button class="btn sm primary" data-act="newUnit">+ ชั้นวาง / กล่อง</button></div></div>
+    ${S.edit?`<div class="editbar">โหมดจัดผัง: ลากเพื่อย้าย · ลากขอบขวา ขอบล่าง หรือมุมเพื่อปรับขนาด<button class="btn sm" data-act="toggleEdit">✓ เสร็จ</button></div>`:''}
+    <div class="plan"><div class="plan-grid">
+      <div></div>
+      <div class="axis" style="grid-template-columns:repeat(${cols},1fr)">${Array.from({length:cols},(_,i)=>`<span>${colName(i)}</span>`).join('')}</div>
+      <div class="axis rows" style="grid-template-rows:repeat(${rows},1fr)">${Array.from({length:rows},(_,i)=>`<span>${i+1}</span>`).join('')}</div>
+      <div class="floor${S.edit?' editing':''}" id="floor" data-cols="${cols}" data-rows="${rows}" style="aspect-ratio:${cols}/${rows};background-size:${100/cols}% ${100/rows}%">${blocks}</div>
+    </div></div>
+    <div class="hint">${S.edit?'กด “✓ เสร็จ” เมื่อจัดเสร็จ ผังจะล็อกไม่ให้เลื่อนโดยไม่ตั้งใจ':'ผังล็อกอยู่ กด “จัดผัง / ปรับขนาด” เพื่อย้ายหรือปรับขนาด'} · แตะกล่องเพื่อดูของข้างใน · ตัวอักษร/ตัวเลขรอบผังคือพิกัดช่อง</div>`;
+}
+
+function renderPanel(){
+  const p=$('#panel');
+  if(mode==='loading'&&!S.rooms.size){p.innerHTML=`<h3>รายละเอียด</h3><div class="empty">รอข้อมูล…</div>`;return}
+  const u=S.sel&&S.units.get(S.sel);
+  if(!u){
+    const r=S.rooms.get(S.room);
+    if(!r){p.innerHTML=`<h3>วิธีใช้</h3><div class="empty">1. เพิ่มห้อง · 2. วางชั้นวาง/กล่องในผัง · 3. จดของในแต่ละกล่อง · 4. ค้นหาจากช่องด้านบน</div>`;return}
+    const tops=topUnits(S.room).sort((a,b)=>String(a[1].code).localeCompare(String(b[1].code),'th',{numeric:true}));
+    p.innerHTML=`<h3>จุดเก็บในห้องนี้</h3>
+      <div class="list">${tops.length?tops.map(([id,x])=>`<div class="row click" tabindex="0" data-pick="${id}"><span class="loc">${esc(x.code)}</span><div class="main"><div class="name">${esc(KINDS[x.kind]||'')}${childrenOf(id).length?` · ${childrenOf(id).length} กล่องข้างใน`:''}</div><div class="sub">ช่อง ${cellRef(x)}${x.note?' · '+esc(x.note):''}</div></div><span class="qty">${countDeep(id)} รายการ</span></div>`).join(''):`<div class="empty">ห้องนี้ยังว่าง กด “+ ชั้นวาง / กล่อง” เพื่อเริ่ม</div>`}</div>`;
+    return;
+  }
+  const kids=childrenOf(S.sel),its=itemsIn(S.sel),path=unitPath(S.sel),parent=u.parentId&&S.units.get(u.parentId);
+  const ref=cellRef(u);
+  p.innerHTML=`
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+      <div class="label"><span class="tag">${esc(u.code)}</span><span class="kind">${esc(KINDS[u.kind]||'')}</span></div>
+      <button class="btn sm" data-act="close" aria-label="ปิด">✕</button></div>
+    <div class="path">${path.map((s,i)=>`${i?'<span>›</span>':''}<b>${esc(s)}</b>`).join('')}${ref?`<span>· ช่อง ${ref}</span>`:''}</div>
+    ${u.note?`<div class="sub" style="font-size:14px">${esc(u.note)}</div>`:''}
+    <div class="actions"><button class="btn sm" data-act="editUnit">แก้ไข / ย้ายไปที่อื่น</button>${!parent?`<button class="btn sm" data-act="newChild">+ กล่องข้างใน</button>`:''}${parent?`<button class="btn sm" data-pick="${u.parentId}">ดู ${esc(parent.code)}</button>`:''}<button class="btn sm danger" data-act="delUnit">ลบ</button></div>
+    ${kids.length?`<div><h3>กล่องข้างใน (${kids.length})</h3><div class="list">${kids.map(([cid,c])=>`<div class="row click" tabindex="0" data-pick="${cid}"><span class="loc">${esc(c.code)}</span><div class="main"><div class="name">${esc(itemsIn(cid).slice(0,3).map(([,i])=>i.name).join(', ')||'ว่าง')}${itemsIn(cid).length>3?' …':''}</div><div class="sub">${esc(KINDS[c.kind]||'')}</div></div><span class="qty">${itemsIn(cid).length} รายการ</span></div>`).join('')}</div></div>`:''}
+    <div><h3>ของใน ${esc(u.code)} (${its.length})</h3>
+      <form class="quick" id="quickAdd" style="margin:8px 0"><input id="quickName" placeholder="ชื่อของ" autocomplete="off" aria-label="ชื่อของ"><input id="quickQty" class="qn" type="number" min="1" value="1" inputmode="numeric" aria-label="จำนวน"><button class="btn" type="button" data-act="newItemFull" aria-label="เพิ่มพร้อมรูป" title="เพิ่มพร้อมรูป">${CAM}</button><button class="btn yellow" type="submit">เพิ่ม</button></form>
+      <div class="sub" style="font-size:12px;color:var(--muted);margin:-2px 0 6px">ถ้าชื่อซ้ำกับของที่มีอยู่ในกล่องนี้ จะบวกจำนวนเพิ่มให้</div>
+      <div class="list">${its.length?its.map(([iid,i])=>itemRow(iid,i)).join(''):`<div class="empty">${kids.length?'ของส่วนใหญ่อยู่ในกล่องข้างใน':'ยังไม่มีของ'}</div>`}</div>
+    </div>`;
+}
+
+function renderResults(){
+  const box=$('#results'),m=matches();
+  if(!m){box.hidden=true;box.innerHTML='';return}
+  box.hidden=false;
+  const rows=m.rows.slice(0,60);
+  box.innerHTML=`<div class="head"><span>พบ ${m.rows.length} รายการ สำหรับ “${esc(S.q.trim())}”</span><button class="btn sm" data-act="clearQ">ล้างการค้นหา</button></div>
+    <div class="list">${rows.length?rows.map(r=>{
+      if(r.t==='item'){const i=S.items.get(r.id);const path=unitPath(i.unitId);return `<div class="row click${(+i.qty||0)<=0?' out':''}" tabindex="0" data-pick="${i.unitId}">${photoSrc(i)?`<span class="thumb sm"><img src="${esc(photoSrc(i))}" alt="" loading="lazy"></span>`:''}<div class="main"><div class="name">${hl(i.name,m.q)} <span class="qty">×${esc(i.qty??1)}</span>${(+i.qty||0)<=0?'<span class="outtag">หมดแล้ว</span>':''}</div><div class="sub">${path.map(esc).join(' › ')}${i.note?' · '+hl(i.note,m.q):''}</div></div><span class="loc">${esc(path[path.length-1])}</span></div>`}
+      const u=S.units.get(r.id);const path=unitPath(r.id);return `<div class="row click" tabindex="0" data-pick="${r.id}"><div class="main"><div class="name">${esc(KINDS[u.kind]||'')} ${hl(u.code,m.q)}</div><div class="sub">${path.slice(0,-1).map(esc).join(' › ')}${u.note?' · '+hl(u.note,m.q):''}</div></div><span class="loc">${esc(u.code)}</span></div>`;
+    }).join(''):`<div class="empty">ไม่พบ ลองคำที่สั้นลง หรือค้นด้วยรหัสกล่อง</div>`}</div>`;
+}
+
+/* ---------- selection ---------- */
+function pick(id){const u=S.units.get(id);if(!u)return;S.room=roomOf(u);S.sel=id;render();
+  if(matchMedia('(max-width:900px)').matches)$('#panel').scrollIntoView({behavior:'smooth',block:'start'})}
+
+/* ---------- modals ---------- */
+function closeModal(){$('#modalRoot').innerHTML=''}
+function modal(html,onSubmit,afterMount){
+  $('#modalRoot').innerHTML=`<div class="overlay" id="ov"><form class="modal" id="mf" novalidate>${html}<div class="err" id="merr"></div></form></div>`;
+  $('#ov').addEventListener('click',e=>{if(e.target.id==='ov')closeModal()});
+  $('#mf').addEventListener('submit',async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));const err=await onSubmit(f,e.submitter&&e.submitter.value);if(err){$('#merr').textContent=err}else closeModal()});
+  afterMount&&afterMount($('#mf'));
+  const first=$('#mf').querySelector('input,select');first&&first.focus();
+}
+const foot=(extra='')=>`<div class="foot">${extra}<button class="btn" type="button" onclick="closeModal()">ยกเลิก</button><button class="btn primary" type="submit" value="save">บันทึก</button></div>`;
+
+function locationOptions(selected){
+  return roomsSorted().map(([rId,r])=>{
+    const opts=topUnits(rId).sort((a,b)=>String(a[1].code).localeCompare(String(b[1].code),'th',{numeric:true})).flatMap(([id,u])=>[[id,u.code+' · '+(KINDS[u.kind]||'')],...childrenOf(id).map(([cid,c])=>[cid,u.code+' › '+c.code+' · '+(KINDS[c.kind]||'')])]);
+    return opts.length?`<optgroup label="${esc(r.name)}">${opts.map(([id,l])=>`<option value="${id}"${id===selected?' selected':''}>${esc(l)}</option>`).join('')}</optgroup>`:'';
+  }).join('');
+}
+
+function roomForm(id){
+  const r=id?S.rooms.get(id):{name:'',cols:10,rows:6};
+  modal(`<h4>${id?'แก้ไขห้อง':'เพิ่มห้อง'}</h4>
+    <div class="field"><label for="f-rname">ชื่อห้อง</label><input id="f-rname" name="name" value="${esc(r.name)}" placeholder="เช่น ห้องเก็บของชั้น 2"></div>
+    <div class="two"><div class="field"><label for="f-rcols">กว้าง (คอลัมน์ A, B, C…)</label><input id="f-rcols" name="cols" type="number" min="2" max="40" value="${r.cols||10}"></div>
+    <div class="field"><label for="f-rrows">ลึก (แถว 1, 2, 3…)</label><input id="f-rrows" name="rows" type="number" min="2" max="40" value="${r.rows||6}"></div></div>
+    ${foot(id?`<button class="btn danger" type="submit" value="delete" style="margin-right:auto">ลบห้อง</button>`:'')}`,
+  async(f,btn)=>{
+    if(btn==='delete'){closeModal();return confirmDeleteRoom(id)}
+    const name=f.name.trim();if(!name)return'กรุณาใส่ชื่อห้อง';
+    const data={name,cols:Math.min(40,Math.max(2,+f.cols||10)),rows:Math.min(40,Math.max(2,+f.rows||6))};
+    if(id)safe(api.update('rooms',id,data),'บันทึกห้องแล้ว');
+    else{const order=Math.max(0,...[...S.rooms.values()].map(x=>x.order||0))+1;try{const nid=await api.add('rooms',{...data,order});S.room=nid;S.sel=null;render();toast('เพิ่มห้องแล้ว')}catch(e){return'เพิ่มห้องไม่สำเร็จ'}}
+  });
+}
+
+function freeSpot(rId,w,h,ignore){
+  const r=S.rooms.get(rId);if(!r)return{x:0,y:0};const cols=r.cols||10,rows=r.rows||6;
+  const occ=topUnits(rId).filter(([id])=>id!==ignore).map(([,u])=>u);
+  for(let y=0;y<=rows-h;y++)for(let x=0;x<=cols-w;x++){if(!occ.some(u=>x<u.x+(u.w||1)&&x+w>u.x&&y<u.y+(u.h||1)&&y+h>u.y))return{x,y}}
+  return{x:0,y:0};
+}
+
+function unitForm(id,preset={}){
+  const u=id?S.units.get(id):{code:'',kind:preset.parentId?'box':'rack',roomId:preset.roomId||S.room,parentId:preset.parentId||'',w:preset.parentId?1:3,h:1,note:''};
+  const curRoom=id?roomOf(u):u.roomId;
+  const hasKids=id&&childrenOf(id).length>0;
+  const parentOpts=rId=>`<option value="">วางบนพื้นห้อง (อยู่ในผัง)</option>`+topUnits(rId).filter(([pid])=>pid!==id).map(([pid,p])=>`<option value="${pid}"${pid===(u.parentId||'')?' selected':''}>อยู่ใน ${esc(p.code)} · ${esc(KINDS[p.kind]||'')}</option>`).join('');
+  modal(`<h4>${id?'แก้ไข / ย้าย '+esc(u.code):'เพิ่มชั้นวาง / กล่อง'}</h4>
+    <div class="two"><div class="field"><label for="f-code">รหัส / ชื่อ</label><input id="f-code" name="code" value="${esc(u.code)}" placeholder="เช่น 1A, R1, ตู้ C"></div>
+    <div class="field"><label for="f-kind">ประเภท</label><select id="f-kind" name="kind">${Object.entries(KINDS).map(([k,l])=>`<option value="${k}"${k===u.kind?' selected':''}>${l}</option>`).join('')}</select></div></div>
+    <div class="field"><label for="f-room">อยู่ห้องไหน</label><select id="f-room" name="roomId">${roomsSorted().map(([rId,r])=>`<option value="${rId}"${rId===curRoom?' selected':''}>${esc(r.name)}</option>`).join('')}</select></div>
+    <div class="field"><label for="f-parent">อยู่ตรงไหน</label><select id="f-parent" name="parentId"${hasKids?' disabled':''}>${parentOpts(curRoom)}</select>${hasKids?`<span class="sub" style="font-size:12px;color:var(--muted)">มีกล่องข้างในอยู่ จึงวางได้เฉพาะบนพื้นห้อง</span>`:''}</div>
+    <div class="two" id="sizeRow"><div class="field"><label for="f-w">กว้าง (ช่อง)</label><input id="f-w" name="w" type="number" min="1" max="40" value="${u.w||1}"></div><div class="field"><label for="f-h">ลึก (ช่อง)</label><input id="f-h" name="h" type="number" min="1" max="40" value="${u.h||1}"></div></div>
+    <div class="field"><label for="f-unote">หมายเหตุ</label><input id="f-unote" name="note" value="${esc(u.note||'')}" placeholder="เช่น กล่องสีฟ้า ฝาใส"></div>
+    ${foot()}`,
+  async f=>{
+    const code=f.code.trim();if(!code)return'กรุณาใส่รหัสหรือชื่อ';
+    const parentId=hasKids?'':(f.parentId||'');
+    const roomId=parentId?S.units.get(parentId).roomId:f.roomId;
+    if(!roomId)return'กรุณาเลือกห้อง';
+    const w=Math.max(1,+f.w||1),h=Math.max(1,+f.h||1);
+    const data={code,kind:f.kind,roomId,parentId,w,h,note:f.note.trim()};
+    if(!parentId){const moved=!id||roomOf(u)!==roomId||(u.parentId&&!parentId);if(moved)Object.assign(data,freeSpot(roomId,w,h,id));else{data.x=u.x|0;data.y=u.y|0}}
+    else{data.x=0;data.y=0}
+    if(id){await safe(api.update('units',id,data),'บันทึกแล้ว');if(hasKids&&roomId!==u.roomId)for(const [cid] of childrenOf(id))await safe(api.update('units',cid,{roomId}))}
+    else{try{const nid=await api.add('units',data);S.room=roomId;S.sel=nid;render();toast('เพิ่ม '+code+' แล้ว')}catch(e){return'เพิ่มไม่สำเร็จ'}}
+  },
+  form=>{
+    const room=form.querySelector('#f-room'),par=form.querySelector('#f-parent'),size=form.querySelector('#sizeRow');
+    const sync=()=>{size.hidden=!!par.value};sync();
+    room.addEventListener('change',()=>{par.innerHTML=parentOpts(room.value);sync()});
+    par.addEventListener('change',sync);
+  });
+}
+
+const CAM='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+const photoSrc=i=>i&&(i.photoLocal||i.photoUrl||(i.photoId?'/_blob/'+i.photoId:''))||'';
+function itemRow(iid,i){
+  const qty=+(i.qty??1)||0,out=qty<=0,src=photoSrc(i),q=S.q.trim().toLowerCase();
+  return `<div class="row${out?' out':''}">${src?`<button class="thumb" data-zoom="${iid}" aria-label="ดูรูป ${esc(i.name)}"><img src="${esc(src)}" alt="" loading="lazy"></button>`:`<button class="thumb ph" data-item="${iid}" data-act="editItem" aria-label="ใส่รูป ${esc(i.name)}" title="ใส่รูป">${CAM}</button>`}
+    <div class="main"><div class="name">${hl(i.name,q)}${out?'<span class="outtag">หมดแล้ว</span>':''}</div>${i.note?`<div class="sub">${esc(i.note)}</div>`:''}
+      <div class="ra">${out?`<button class="btn sm danger" data-item="${iid}" data-act="removeItem">เอาออก</button>`:''}<button class="btn sm" data-item="${iid}" data-act="moveItem">ย้าย</button><button class="btn sm" data-item="${iid}" data-act="editItem" aria-label="แก้ไข ${esc(i.name)}">แก้</button></div></div>
+    <div class="step"><button data-item="${iid}" data-act="dec" aria-label="ลด ${esc(i.name)} 1 ชิ้น">−</button><span class="v">${qty}</span><button data-item="${iid}" data-act="inc" aria-label="เพิ่ม ${esc(i.name)} 1 ชิ้น">+</button></div></div>`;
+}
+const pendingQty={},qtyTimers={};
+function bump(iid,d){
+  const i=S.items.get(iid);if(!i)return;const q=Math.max(0,(+i.qty||0)+d);if(q===(+i.qty||0))return;
+  pendingQty[iid]=q;S.items.set(iid,{...i,qty:q});render();
+  clearTimeout(qtyTimers[iid]);
+  qtyTimers[iid]=setTimeout(async()=>{const v=pendingQty[iid];try{await api.update('items',iid,{qty:v,updatedAt:new Date().toISOString()});if(v===0)toast(i.name+' หมดแล้ว กด “เอาออก” ถ้าไม่เก็บไว้แล้ว')}catch(e){toast('บันทึกจำนวนไม่สำเร็จ')}finally{if(pendingQty[iid]===v)delete pendingQty[iid]}},500);
+}
+async function shrink(file){
+  const url=URL.createObjectURL(file);
+  try{const img=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=url});
+    const s=Math.min(1,1280/Math.max(img.naturalWidth,img.naturalHeight));
+    const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(b=>r(b||file),'image/jpeg',0.82));
+  }catch(e){return file}finally{URL.revokeObjectURL(url)}
+}
+function zoom(iid){
+  const i=S.items.get(iid);if(!i)return;
+  $('#modalRoot').innerHTML=`<div class="overlay" id="ov"><div class="lb"><img src="${esc(photoSrc(i))}" alt="${esc(i.name)}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>${esc(i.name)} <span class="qty">×${esc(i.qty??1)}</span></b><button class="btn sm" type="button" onclick="closeModal()">ปิด</button></div></div></div>`;
+  $('#ov').addEventListener('click',e=>{if(e.target.id==='ov')closeModal()});
+}
+function itemForm(iid,unitId,focusLoc,preset={}){
+  const i=iid?S.items.get(iid):{name:preset.name||'',qty:preset.qty||1,note:'',unitId};
+  const photo={blob:null,remove:false};
+  const curSrc=photoSrc(i);
+  const canPhoto=!!assetsNs||!db;
+  modal(`<h4>${iid?(focusLoc?'ย้าย '+esc(i.name):'แก้ไขของ'):'เพิ่มของ'}</h4>
+    <div class="field"><label for="f-iname">ชื่อของ</label><input id="f-iname" name="name" value="${esc(i.name)}"></div>
+    <div class="two"><div class="field"><label for="f-qty">จำนวน</label><div class="step" style="align-self:flex-start"><button type="button" data-fq="-1" aria-label="ลด">−</button><input id="f-qty" name="qty" type="number" min="0" inputmode="numeric" value="${esc(i.qty??1)}"><button type="button" data-fq="1" aria-label="เพิ่ม">+</button></div></div><div class="field"><label for="f-inote">หมายเหตุ</label><input id="f-inote" name="note" value="${esc(i.note||'')}" placeholder="สี ยี่ห้อ ฯลฯ"></div></div>
+    <div class="field"><label for="f-loc">เก็บไว้ที่</label><select id="f-loc" name="unitId">${locationOptions(i.unitId)}</select></div>
+    <div class="field"><label>รูป</label>${canPhoto?`<div class="photo-pick"><img id="f-prev" alt="" ${curSrc?`src="${esc(curSrc)}"`:'hidden'}><div class="actions"><label class="btn sm" for="f-photo" id="f-plabel">${CAM} ${curSrc?'เปลี่ยนรูป':'ถ่าย / เลือกรูป'}</label><button class="btn sm danger" type="button" id="f-delphoto" ${curSrc?'':'hidden'}>ลบรูป</button></div><input id="f-photo" type="file" accept="image/*" hidden></div>`:`<span style="font-size:13px;color:var(--muted)">ใส่รูปได้เฉพาะเจ้าของหรือผู้ที่แก้ไขได้</span>`}</div>
+    ${foot(iid?`<button class="btn danger" type="submit" value="delete" style="margin-right:auto">ลบ</button>`:'')}`,
+  async(f,btn)=>{
+    if(btn==='delete'){safe(api.del('items',iid),'ลบ '+i.name+' แล้ว');return}
+    const name=f.name.trim();if(!name)return'กรุณาใส่ชื่อของ';
+    const data={name,qty:Math.max(0,+f.qty||0),note:f.note.trim(),unitId:f.unitId,updatedAt:new Date().toISOString()};
+    let oldPhoto=null;
+    if(photo.blob){
+      if(assetsNs){$('#merr').textContent='กำลังอัปโหลดรูป…';
+        try{const r=await assetsNs.upload(photo.blob);data.photoId=r.id;data.photoUrl=r.url;oldPhoto=i.photoId||null}catch(e){return'อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง'}}
+      else if(!db)data.photoLocal=URL.createObjectURL(photo.blob);
+    }else if(photo.remove){data.photoId='';data.photoUrl='';data.photoLocal='';oldPhoto=i.photoId||null}
+    if(iid){const moved=data.unitId!==i.unitId;await safe(api.update('items',iid,data),moved?'ย้าย '+name+' ไป '+unitPath(data.unitId).join(' › '):'บันทึกแล้ว')}
+    else await safe(api.add('items',data),'เพิ่ม '+name+' แล้ว');
+    if(oldPhoto&&assetsNs)assetsNs.delete(oldPhoto).catch(()=>{});
+  },
+  form=>{
+    if(focusLoc)setTimeout(()=>form.querySelector('#f-loc').focus(),0);
+    const inp=form.querySelector('#f-photo');if(!inp)return;
+    const prev=form.querySelector('#f-prev'),del=form.querySelector('#f-delphoto'),lab=form.querySelector('#f-plabel');
+    inp.addEventListener('change',async()=>{const f=inp.files&&inp.files[0];if(!f)return;photo.blob=await shrink(f);photo.remove=false;prev.src=URL.createObjectURL(photo.blob);prev.hidden=false;del.hidden=false;lab.innerHTML=CAM+' เปลี่ยนรูป'});
+    del.addEventListener('click',()=>{photo.blob=null;photo.remove=true;inp.value='';prev.hidden=true;prev.removeAttribute('src');del.hidden=true;lab.innerHTML=CAM+' ถ่าย / เลือกรูป'});
+  });
+}
+
+function confirmBox(title,body,label,fn){
+  modal(`<h4>${title}</h4><div>${body}</div><div class="foot"><button class="btn" type="button" onclick="closeModal()">ยกเลิก</button><button class="btn primary" type="submit" style="background:var(--danger);border-color:var(--danger)">${label}</button></div>`,async()=>{await fn()});
+}
+function confirmDeleteUnit(id){
+  const u=S.units.get(id),kids=childrenOf(id),n=countDeep(id);
+  confirmBox('ลบ '+esc(u.code)+' ?',`จะลบ${kids.length?` กล่องข้างใน ${kids.length} กล่อง และ`:''} ของ ${n} รายการที่อยู่ในนั้นด้วย ย้อนกลับไม่ได้`,'ลบ',async()=>{
+    for(const [cid] of kids){for(const [iid] of itemsIn(cid))await safe(api.del('items',iid));await safe(api.del('units',cid))}
+    for(const [iid] of itemsIn(id))await safe(api.del('items',iid));
+    await safe(api.del('units',id),'ลบ '+u.code+' แล้ว');S.sel=null;render();
+  });
+}
+function confirmDeleteRoom(id){
+  const r=S.rooms.get(id),tops=topUnits(id),n=tops.reduce((s,[uid])=>s+countDeep(uid),0);
+  confirmBox('ลบห้อง '+esc(r.name)+' ?',`จะลบจุดเก็บ ${tops.length} จุด และของ ${n} รายการในห้องนี้ ย้อนกลับไม่ได้`,'ลบห้อง',async()=>{
+    for(const [uid] of tops){for(const [cid] of childrenOf(uid)){for(const [iid] of itemsIn(cid))await safe(api.del('items',iid));await safe(api.del('units',cid))}for(const [iid] of itemsIn(uid))await safe(api.del('items',iid));await safe(api.del('units',uid))}
+    await safe(api.del('rooms',id),'ลบห้องแล้ว');S.room=null;S.sel=null;render();
+  });
+}
+
+let toastT;function toast(msg){let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{
+  const t=e.target;
+  const fq=t.closest('[data-fq]');if(fq){const q=$('#f-qty');q.value=Math.max(0,(+q.value||0)+(+fq.dataset.fq));return}
+  const zm=t.closest('[data-zoom]');if(zm){zoom(zm.dataset.zoom);return}
+  const chip=t.closest('[data-chip]');if(chip){e.stopPropagation();pick(chip.dataset.chip);return}
+  const un=t.closest('.unit');if(un&&!S.edit){pick(un.dataset.unit);return}
+  const tab=t.closest('[data-room]');if(tab){S.room=tab.dataset.room;S.sel=null;render();return}
+  if(t.closest('#addRoom'))return roomForm();
+  const pk=t.closest('[data-pick]');if(pk){pick(pk.dataset.pick);return}
+  const a=t.closest('[data-act]');if(!a)return;
+  const act=a.dataset.act;
+  if(act==='toggleEdit'){S.edit=!S.edit;render();toast(S.edit?'เปิดโหมดจัดผัง':'ล็อกผังแล้ว');return}
+  if(act==='newRoom')roomForm();
+  else if(act==='editRoom')roomForm(S.room);
+  else if(act==='newUnit')unitForm(null,{roomId:S.room});
+  else if(act==='newChild')unitForm(null,{parentId:S.sel,roomId:S.room});
+  else if(act==='editUnit')unitForm(S.sel);
+  else if(act==='delUnit')confirmDeleteUnit(S.sel);
+  else if(act==='close'){S.sel=null;render()}
+  else if(act==='editItem')itemForm(a.dataset.item);
+  else if(act==='moveItem')itemForm(a.dataset.item,null,true);
+  else if(act==='inc')bump(a.dataset.item,1);
+  else if(act==='dec')bump(a.dataset.item,-1);
+  else if(act==='removeItem'){const it=S.items.get(a.dataset.item);if(it)safe(api.del('items',a.dataset.item),'เอา '+it.name+' ออกแล้ว')}
+  else if(act==='newItemFull'){const n=$('#quickName'),q=$('#quickQty');itemForm(null,S.sel,false,{name:n?n.value.trim():'',qty:Math.max(1,+(q&&q.value)||1)});if(n)n.value=''}
+  else if(act==='clearQ'){S.q='';$('#q').value='';render()}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&$('#ov'))closeModal();
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-pick],[data-chip],.unit')){e.preventDefault();const t=e.target;pick(t.dataset.pick||t.dataset.chip||t.dataset.unit)}
+});
+document.addEventListener('submit',e=>{
+  if(e.target.id!=='quickAdd')return;e.preventDefault();
+  const inp=$('#quickName'),qi=$('#quickQty'),name=inp.value.trim();if(!name||!S.sel)return;
+  const n=Math.max(1,+qi.value||1);inp.value='';qi.value=1;
+  const same=itemsIn(S.sel).find(([,x])=>String(x.name).trim().toLowerCase()===name.toLowerCase());
+  if(same){const [sid,sx]=same;const nq=(+sx.qty||0)+n;S.items.set(sid,{...sx,qty:nq});render();safe(api.update('items',sid,{qty:nq,updatedAt:new Date().toISOString()}),name+' มีอยู่แล้ว บวกเพิ่มเป็น '+nq)}
+  else safe(api.add('items',{name,qty:n,note:'',unitId:S.sel,updatedAt:new Date().toISOString()}),'เพิ่ม '+name+' ×'+n+' แล้ว');
+  setTimeout(()=>{const n=$('#quickName');n&&n.focus()},50);
+});
+let qT;$('#q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>{S.q=e.target.value;render()},120)});
+
+/* drag units on floor */
+let drag=null;
+document.addEventListener('pointerdown',e=>{
+  if(!S.edit)return;
+  const el=e.target.closest('.unit');if(!el||e.target.closest('[data-chip]')||e.button>0)return;
+  const floor=$('#floor');const fr=floor.getBoundingClientRect();
+  const rzEl=e.target.closest('[data-rz]');
+  drag={rz:rzEl?rzEl.dataset.rz:null,nw:+el.dataset.w,nh:+el.dataset.h,el,id:el.dataset.unit,sx:e.clientX,sy:e.clientY,x:+el.dataset.x,y:+el.dataset.y,w:+el.dataset.w,h:+el.dataset.h,cols:+floor.dataset.cols,rows:+floor.dataset.rows,cw:fr.width/+floor.dataset.cols,ch:fr.height/+floor.dataset.rows,moved:false,nx:+el.dataset.x,ny:+el.dataset.y};
+  el.setPointerCapture(e.pointerId);
+});
+document.addEventListener('pointermove',e=>{
+  if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
+  if(!drag.moved&&Math.hypot(dx,dy)<5)return;
+  drag.moved=true;drag.el.classList.add('dragging');
+  if(drag.rz){
+    if(drag.rz!=='s')drag.nw=Math.min(drag.cols-drag.x,Math.max(1,drag.w+Math.round(dx/drag.cw)));
+    if(drag.rz!=='e')drag.nh=Math.min(drag.rows-drag.y,Math.max(1,drag.h+Math.round(dy/drag.ch)));
+    drag.el.style.width=drag.nw/drag.cols*100+'%';drag.el.style.height=drag.nh/drag.rows*100+'%';
+    let tag=drag.el.querySelector('.sizetag');if(!tag){tag=document.createElement('span');tag.className='sizetag';drag.el.appendChild(tag)}
+    tag.textContent=drag.nw+'×'+drag.nh+' ช่อง';
+    return;
+  }
+  drag.nx=Math.min(drag.cols-drag.w,Math.max(0,drag.x+Math.round(dx/drag.cw)));
+  drag.ny=Math.min(drag.rows-drag.h,Math.max(0,drag.y+Math.round(dy/drag.ch)));
+  drag.el.style.left=drag.nx/drag.cols*100+'%';drag.el.style.top=drag.ny/drag.rows*100+'%';
+});
+document.addEventListener('pointerup',e=>{
+  if(!drag)return;const d=drag;drag=null;d.el.classList.remove('dragging');
+  if(!d.moved){pick(d.id);return}
+  if(d.rz){
+    if(d.nw!==d.w||d.nh!==d.h){const u=S.units.get(d.id);if(u)S.units.set(d.id,{...u,w:d.nw,h:d.nh});safe(api.update('units',d.id,{w:d.nw,h:d.nh}),'ปรับ '+(u?u.code:'')+' เป็น '+d.nw+'×'+d.nh+' ช่อง')}
+    render();return;
+  }
+  if(d.nx!==d.x||d.ny!==d.y){const u=S.units.get(d.id);if(u)S.units.set(d.id,{...u,x:d.nx,y:d.ny});safe(api.update('units',d.id,{x:d.nx,y:d.ny}),'ย้าย '+(u?u.code:'')+' ไปช่อง '+colName(d.nx)+(d.ny+1))}
+  render();
+});
+document.addEventListener('pointercancel',()=>{if(drag){drag.el.classList.remove('dragging');drag=null;render()}});
+
+/* ---------- local fallback sample ---------- */
+function loadSample(){
+  const R=(id,name,cols,rows,order)=>S.rooms.set(id,{name,cols,rows,order});
+  const U=(id,roomId,code,kind,x,y,w,h,parentId='',note='')=>S.units.set(id,{roomId,code,kind,x,y,w,h,parentId,note});
+  const I=(unitId,name,qty=1,note='')=>S.items.set(rid(),{unitId,name,qty,note});
+  R('r1','ห้องเก็บของ (ตัวอย่าง)',10,6,1);R('r2','โรงรถ (ตัวอย่าง)',8,6,2);
+  U('u1','r1','R1','rack',0,0,4,1);U('u2','r1','1A','box',0,0,1,1,'u1');U('u3','r1','2A','box',0,0,1,1,'u1');U('u4','r1','3A','box',0,0,1,1,'u1');
+  U('u5','r1','R2','rack',0,2,1,4);U('u6','r1','1B','box',0,0,1,1,'u5');U('u7','r1','2B','box',0,0,1,1,'u5');
+  U('u8','r1','ตู้ C','cabinet',7,0,3,2,'','ตู้เหล็กสีเทา');U('u9','r1','X1','box',5,4,2,2,'','กล่องใหญ่ ฝาใส');
+  U('u10','r2','G1','rack',0,0,5,1);U('u11','r2','1G','box',0,0,1,1,'u10');U('u12','r2','2G','bag',0,0,1,1,'u10');
+  I('u2','สายชาร์จ USB-C',4);I('u2','ปลั๊กพ่วง 3 ช่อง',2);I('u3','ไฟฉาย',1,'ใส่ถ่าน AA');I('u3','ถ่าน AA',12);I('u4','ของตกแต่งคริสต์มาส',1,'ไฟประดับ + ลูกบอล');
+  I('u6','เอกสารภาษี 2025',1,'แฟ้มสีน้ำเงิน');I('u7','สมุดบัญชีเก่า',3);I('u8','สว่านไฟฟ้า',1);I('u8','ชุดไขควง',1);I('u9','ผ้าห่มฤดูหนาว',2);
+  I('u11','เต็นท์ 2 คน',1);I('u12','ถุงนอน',2);
+}
+
+/* ---------- boot ---------- */
+render();
+let loadTimer=setTimeout(()=>{if(mode==='loading'){$('#status').textContent='ยังเชื่อมต่อข้อมูลไม่ได้ ลองเปิดใหม่ภายหลัง';$('#status').className='status warn'}},10000);
+(async()=>{
+  let ns=null;
+  try{ns=window.claude&&await window.claude.use('db')}catch(e){ns=null}
+  if(!ns){clearTimeout(loadTimer);mode='local';loadSample();$('#status').textContent='โหมดทดลอง: ข้อมูลไม่ถูกบันทึก';$('#status').className='status warn';render();return}
+  db=ns;
+  window.claude.use('assets').then(a=>{assetsNs=a}).catch(()=>{});
+  const done=()=>{if(S.loaded.rooms&&S.loaded.units&&S.loaded.items&&mode==='loading'){mode='live';clearTimeout(loadTimer);$('#status').textContent='บันทึกอัตโนมัติ';$('#status').className='status'}};
+  for(const col of ['rooms','units','items']){
+    db.collection(col).onSnapshot(snap=>{
+      const m=new Map();for(const d of snap.docs)m.set(d.id,{...d.data()});
+      if(col==='items')for(const k in pendingQty)if(m.has(k))m.set(k,{...m.get(k),qty:pendingQty[k]});
+      S[col]=m;
+      if(!snap.metadata.fromCache)S.loaded[col]=true;done();
+      if(!drag)render();
+    },err=>{clearTimeout(loadTimer);S.loaded[col]=true;mode=mode==='loading'?'live':mode;$('#status').textContent='โหลดข้อมูลไม่สำเร็จ ('+(err&&err.code||'error')+')';$('#status').className='status warn';render()});
+  }
+})();
+</script>
+
+</body>
+</html>
