@@ -7,7 +7,6 @@
 </head>
 <body>
 <title>แผนที่เก็บของ</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
 <style>
@@ -170,6 +169,7 @@ mark{background:var(--accent);color:var(--accent-fg);border-radius:2px;padding:0
       <input id="q" type="search" placeholder="ค้นหาของ เช่น ปลั๊กพ่วง, เอกสาร, 1A" autocomplete="off" aria-label="ค้นหาของ">
     </div>
     <span id="status" class="status">กำลังโหลด…</span>
+    <button class="btn sm" data-act="settings">ตั้งค่า Google Sheet</button>
   </header>
   <div id="results" class="results" hidden></div>
   <div class="grid">
@@ -202,11 +202,72 @@ function unitPath(id){const u=S.units.get(id);if(!u)return[];const out=[];const 
 function cellRef(u){if(u.parentId&&S.units.has(u.parentId))return null;const a=colName(u.x)+(u.y+1),b=colName(u.x+u.w-1)+(u.y+u.h);return a===b?a:a+'–'+b}
 
 /* ---------- store layer (db or in-memory fallback) ---------- */
-const api={
-  async add(col,data){if(db){const ref=await db.collection(col).add(data);return ref.id}const id=rid();S[col].set(id,{...data});render();return id},
-  async update(col,id,data){if(db)return db.doc(col+'/'+id).update(data);const cur=S[col].get(id);if(cur)S[col].set(id,{...cur,...data});render()},
-  async del(col,id){const it=col==='items'&&S.items.get(id);if(db){await db.doc(col+'/'+id).delete();if(it&&it.photoId&&assetsNs)assetsNs.delete(it.photoId).catch(()=>{});return}S[col].delete(id);render()}
+/* ---------- Google Sheet (Apps Script) store ---------- */
+const CFG_KEY='storage-map-config';
+function loadCfg(){try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null')||{}}catch(e){return{}}}
+function saveCfg(c){try{localStorage.setItem(CFG_KEY,JSON.stringify(c))}catch(e){}}
+let CFG=loadCfg();
+(function(){try{const u=new URL(location.href),a=u.searchParams.get('api');if(a){CFG={url:a,key:u.searchParams.get('key')||''};saveCfg(CFG);u.searchParams.delete('api');u.searchParams.delete('key');history.replaceState(null,'',u.pathname+u.search+u.hash)}}catch(e){}})();
+let pending=0,chain=Promise.resolve();
+function setStatus(t,warn){const el=$('#status');el.textContent=t;el.className='status'+(warn?' warn':'')}
+function liveStatus(){if(mode==='live')setStatus(pending?'กำลังบันทึก…':'บันทึกลง Google Sheet แล้ว')}
+async function gasGet(){
+  const u=CFG.url+(CFG.url.includes('?')?'&':'?')+'action=all&key='+encodeURIComponent(CFG.key||'')+'&t='+Date.now();
+  const r=await fetch(u);const j=await r.json();if(!j.ok)throw new Error(j.error||'error');return j.data;
+}
+function gasPost(payload){
+  pending++;liveStatus();
+  const run=()=>fetch(CFG.url,{method:'POST',body:JSON.stringify({...payload,key:CFG.key||''})}).then(r=>r.json()).then(j=>{if(!j.ok)throw new Error(j.error||'error');return j});
+  const p=chain.then(run);chain=p.catch(()=>{});
+  return p.finally(()=>{pending--;liveStatus()}).catch(e=>{setTimeout(refresh,800);throw e});
+}
+const gasPhotos={
+  async upload(blob){
+    const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]);fr.onerror=rej;fr.readAsDataURL(blob)});
+    const j=await gasPost({action:'upload',name:'item-'+Date.now()+'.jpg',mime:blob.type||'image/jpeg',data:b64});
+    return {id:j.id,url:j.url};
+  },
+  delete(id){return gasPost({action:'deletePhoto',id})}
 };
+const api={
+  async add(col,data){const id=rid();S[col].set(id,{...data});render();if(db)await gasPost({action:'upsert',col,id,data});return id},
+  async update(col,id,data){const cur=S[col].get(id);if(cur)S[col].set(id,{...cur,...data});render();if(db)await gasPost({action:'upsert',col,id,data})},
+  async del(col,id){const it=col==='items'&&S.items.get(id);S[col].delete(id);render();if(db){await gasPost({action:'delete',col,id});if(it&&it.photoId)gasPhotos.delete(it.photoId).catch(()=>{})}}
+};
+async function refresh(){
+  if(!db||pending||drag||$('#ov'))return;
+  try{
+    const d=await gasGet();if(pending||drag)return;
+    for(const col of ['rooms','units','items']){
+      const m=new Map();for(const r of (d[col]||[])){const {id,...rest}=r;if(id!==''&&id!=null)m.set(String(id),rest)}
+      if(col==='items')for(const k in pendingQty)if(m.has(k))m.set(k,{...m.get(k),qty:pendingQty[k]});
+      S[col]=m;
+    }
+    mode='live';liveStatus();render();
+  }catch(e){
+    if(mode==='loading')mode='error';
+    setStatus('โหลดจาก Google Sheet ไม่สำเร็จ ('+(e.message||e)+') กด “ตั้งค่า Google Sheet” เพื่อตรวจ',true);render();
+  }
+}
+function settingsForm(){
+  const share=CFG.url?location.origin+location.pathname+'?api='+encodeURIComponent(CFG.url)+'&key='+encodeURIComponent(CFG.key||''):'';
+  modal(`<h4>เชื่อม Google Sheet</h4>
+    <div style="font-size:13.5px;color:var(--muted)">วางลิงก์ Web app (ลงท้ายด้วย /exec) จาก Apps Script และรหัส KEY ที่ตั้งไว้ใน Code.gs ดูวิธีตั้งค่าใน README ของ repo</div>
+    <div class="field"><label for="f-url">ลิงก์ Web app</label><input id="f-url" name="url" value="${esc(CFG.url||'')}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></div>
+    <div class="field"><label for="f-key">รหัส (KEY)</label><input id="f-key" name="key" value="${esc(CFG.key||'')}" autocomplete="off"></div>
+    ${share?`<div class="field"><label for="f-share">ลิงก์ให้เพื่อน เปิดแล้วเชื่อมให้อัตโนมัติ (มีรหัสอยู่ในลิงก์ ส่งเฉพาะคนที่ไว้ใจ)</label><input id="f-share" readonly value="${esc(share)}"><div class="actions"><button class="btn sm" type="button" id="f-copy">คัดลอกลิงก์</button></div></div>`:''}
+    ${foot(CFG.url?`<button class="btn danger" type="submit" value="disconnect" style="margin-right:auto">เลิกเชื่อม</button>`:'')}`,
+  async(f,btn)=>{
+    if(btn==='disconnect'){saveCfg({});location.reload();return}
+    const url=f.url.trim();
+    if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url))return'ลิงก์ต้องขึ้นต้นด้วย https://script.google.com/ และลงท้ายด้วย /exec';
+    $('#merr').textContent='กำลังทดสอบการเชื่อมต่อ…';
+    const old=CFG;CFG={url,key:f.key.trim()};
+    try{await gasGet()}catch(e){CFG=old;return'เชื่อมไม่สำเร็จ: '+(e.message||e)}
+    saveCfg(CFG);location.reload();
+  },
+  form=>{const b=form.querySelector('#f-copy');if(b)b.addEventListener('click',async()=>{const i=form.querySelector('#f-share');try{await navigator.clipboard.writeText(i.value);toast('คัดลอกลิงก์แล้ว')}catch(e){i.select();toast('กดค้างที่ลิงก์เพื่อคัดลอก')}})});
+}
 async function safe(p,okMsg){try{await p;if(okMsg)toast(okMsg)}catch(e){toast('บันทึกไม่สำเร็จ: '+(e&&e.message||e&&e.code||'ลองใหม่อีกครั้ง'))}}
 
 /* ---------- render ---------- */
@@ -385,7 +446,7 @@ function unitForm(id,preset={}){
 }
 
 const CAM='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
-const photoSrc=i=>i&&(i.photoLocal||i.photoUrl||(i.photoId?'/_blob/'+i.photoId:''))||'';
+const photoSrc=i=>i&&(i.photoLocal||i.photoUrl||(i.photoId?'https://drive.google.com/thumbnail?id='+encodeURIComponent(i.photoId)+'&sz=w1200':''))||'';
 function itemRow(iid,i){
   const qty=+(i.qty??1)||0,out=qty<=0,src=photoSrc(i),q=S.q.trim().toLowerCase();
   return `<div class="row${out?' out':''}">${src?`<button class="thumb" data-zoom="${iid}" aria-label="ดูรูป ${esc(i.name)}"><img src="${esc(src)}" alt="" loading="lazy"></button>`:`<button class="thumb ph" data-item="${iid}" data-act="editItem" aria-label="ใส่รูป ${esc(i.name)}" title="ใส่รูป">${CAM}</button>`}
@@ -481,6 +542,7 @@ document.addEventListener('click',e=>{
   const pk=t.closest('[data-pick]');if(pk){pick(pk.dataset.pick);return}
   const a=t.closest('[data-act]');if(!a)return;
   const act=a.dataset.act;
+  if(act==='settings')return settingsForm();
   if(act==='toggleEdit'){S.edit=!S.edit;render();toast(S.edit?'เปิดโหมดจัดผัง':'ล็อกผังแล้ว');return}
   if(act==='newRoom')roomForm();
   else if(act==='editRoom')roomForm(S.room);
@@ -567,24 +629,13 @@ function loadSample(){
 
 /* ---------- boot ---------- */
 render();
-let loadTimer=setTimeout(()=>{if(mode==='loading'){$('#status').textContent='ยังเชื่อมต่อข้อมูลไม่ได้ ลองเปิดใหม่ภายหลัง';$('#status').className='status warn'}},10000);
-(async()=>{
-  let ns=null;
-  try{ns=window.claude&&await window.claude.use('db')}catch(e){ns=null}
-  if(!ns){clearTimeout(loadTimer);mode='local';loadSample();$('#status').textContent='โหมดทดลอง: ข้อมูลไม่ถูกบันทึก';$('#status').className='status warn';render();return}
-  db=ns;
-  window.claude.use('assets').then(a=>{assetsNs=a}).catch(()=>{});
-  const done=()=>{if(S.loaded.rooms&&S.loaded.units&&S.loaded.items&&mode==='loading'){mode='live';clearTimeout(loadTimer);$('#status').textContent='บันทึกอัตโนมัติ';$('#status').className='status'}};
-  for(const col of ['rooms','units','items']){
-    db.collection(col).onSnapshot(snap=>{
-      const m=new Map();for(const d of snap.docs)m.set(d.id,{...d.data()});
-      if(col==='items')for(const k in pendingQty)if(m.has(k))m.set(k,{...m.get(k),qty:pendingQty[k]});
-      S[col]=m;
-      if(!snap.metadata.fromCache)S.loaded[col]=true;done();
-      if(!drag)render();
-    },err=>{clearTimeout(loadTimer);S.loaded[col]=true;mode=mode==='loading'?'live':mode;$('#status').textContent='โหลดข้อมูลไม่สำเร็จ ('+(err&&err.code||'error')+')';$('#status').className='status warn';render()});
-  }
-})();
+if(!CFG.url){
+  mode='local';loadSample();setStatus('โหมดทดลอง: ยังไม่ได้เชื่อม Google Sheet ข้อมูลไม่ถูกบันทึก',true);render();
+}else{
+  db={remote:true};assetsNs=gasPhotos;setStatus('กำลังโหลดจาก Google Sheet…');refresh();
+  setInterval(()=>{if(document.visibilityState==='visible')refresh()},30000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh()});
+}
 </script>
 
 </body>
